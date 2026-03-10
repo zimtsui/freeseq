@@ -1,0 +1,26 @@
+{
+  "name": "@zimtsui/freeseq",
+  "exports": "./build/exports.js",
+  "description": "",
+  "type": "module",
+  "scripts": {
+    "test": "ava ./build/test.js",
+    "build": "tsc -b ./src/tsconfig.json",
+    "clean": "rm -rf ./build",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zimtsui/typelog.git"
+  },
+  "author": "Zim",
+  "devDependencies": {
+    "ava": "^7.0.0"
+  },
+  "ava": {
+    "failWithoutAssertions": false
+  },
+  "peerDependencies": {
+    "@types/node": "^22.19.13"
+  }
+}
