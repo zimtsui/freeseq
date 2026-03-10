@@ -134,6 +134,56 @@ test.serial('FreeSeq.join joins even when the task rejects', async (t) => {
     t.deepEqual(events, ['join:child->parent']);
 });
 
+test.serial('FreeSeq.forkjoin runs on a child thread and joins back automatically', async (t) => {
+    const events: string[] = [];
+    const freeseq = FreeSeq.create(
+        (slave, master) => events.push(`fork:${master.name}->${slave.name}`),
+        (joinee, joiner) => events.push(`join:${joinee.name}->${joiner.name}`),
+    );
+    const parent = Thread.fork('parent', Thread.ROOT);
+
+    await Worker.fork(parent, async () => {
+        const result = await freeseq.forkjoin('child', async () => {
+            t.is(Worker.getThread().name, 'child');
+            await Promise.resolve();
+            t.is(Worker.getThread().name, 'child');
+            return 'done';
+        });
+
+        t.is(result, 'done');
+        t.is(Worker.getThread(), parent);
+    });
+
+    t.deepEqual(events, [
+        'fork:parent->child',
+        'join:child->parent',
+    ]);
+});
+
+test.serial('FreeSeq.forkjoin still joins when the task rejects', async (t) => {
+    const events: string[] = [];
+    const freeseq = FreeSeq.create(
+        (slave, master) => events.push(`fork:${master.name}->${slave.name}`),
+        (joinee, joiner) => events.push(`join:${joinee.name}->${joiner.name}`),
+    );
+    const parent = Thread.fork('parent', Thread.ROOT);
+
+    await Worker.fork(parent, async () => {
+        await t.throwsAsync(async () => await freeseq.forkjoin('child', async () => {
+            throw new Error('boom');
+        }), {
+            message: 'boom',
+        });
+
+        t.is(Worker.getThread(), parent);
+    });
+
+    t.deepEqual(events, [
+        'fork:parent->child',
+        'join:child->parent',
+    ]);
+});
+
 test.serial('FreeSeq.join accepts an explicit joiner thread for sync joins', (t) => {
     const events: string[] = [];
     const freeseq = FreeSeq.create(

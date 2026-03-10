@@ -75,6 +75,13 @@ export namespace FreeSeq {
             if (promiseOrJoinee instanceof Thread.Promise) return this.joinAsync(promiseOrJoinee);
             else return this.joinSync(promiseOrJoinee, joiner);
         }
+
+        /**
+         * @throws may throw synchronously if `onjoin` throws.
+         */
+        public forkjoin<T>(name: string, f: () => T): PromiseLike<Awaited<T>> {
+            return this.join(this.fork(name, f));
+        }
     }
 
 }
