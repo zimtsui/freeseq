@@ -62,8 +62,7 @@ export namespace FreeSeq {
         protected joinAsync<T>(promise: Thread.Promise<T>): PromiseLike<T> {
             return promise.finally(() => this.joinSync(promise.thread));
         }
-        protected joinSync(joinee: Thread): void {
-            const joiner = Worker.getThread();
+        protected joinSync(joinee: Thread, joiner = Worker.getThread()): void {
             this.onjoin(joinee, joiner);
         }
 
@@ -71,19 +70,10 @@ export namespace FreeSeq {
          * @throws may throw synchronously if `onjoin` throws.
          */
         public join<T>(promise: Thread.Promise<T>): PromiseLike<T>;
-        public join(joinee: Thread): void;
-        public join<T>(promiseOrJoinee: Thread.Promise<T> | Thread): PromiseLike<T> | void {
+        public join(joinee: Thread, joiner?: Thread): void;
+        public join<T>(promiseOrJoinee: Thread.Promise<T> | Thread, joiner?: Thread): PromiseLike<T> | void {
             if (promiseOrJoinee instanceof Thread.Promise) return this.joinAsync(promiseOrJoinee);
-            else return this.joinSync(promiseOrJoinee);
-        }
-
-        public selfjoin(joinee: Thread): void {
-            this.onjoin(joinee, joinee);
-        }
-        public masterjoin(slave: Thread): void {
-            const master = Thread.masters.get(slave);
-            if (master) this.onjoin(slave, master);
-            else return this.selfjoin(slave);
+            else return this.joinSync(promiseOrJoinee, joiner);
         }
     }
 

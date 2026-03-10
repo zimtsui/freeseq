@@ -8,9 +8,12 @@ test.serial('Thread.fork records the master thread', (t) => {
     const master = Thread.fork('master', Thread.ROOT);
     const slave = Thread.fork('slave', master);
 
-    t.is(Thread.masters.get(slave), master);
+    t.is(Thread.master(slave), master);
     t.is(slave.name, 'slave');
     t.true(slave.id > master.id);
+    t.throws(() => Thread.master(Thread.ROOT), {
+        message: 'The thread ROOT has no master.',
+    });
 });
 
 test.serial('Worker.fork and Worker.exec keep thread state inside async context', async (t) => {
@@ -51,7 +54,7 @@ test.serial('FreeSeq.fork runs work on a child thread and joins back to the call
             return Worker.getThread().name;
         });
 
-        t.is(Thread.masters.get(promise.thread), parent);
+        t.is(Thread.master(promise.thread), parent);
         t.is(await freeseq.join(promise), 'child');
         t.is(Worker.getThread(), parent);
     });
@@ -73,7 +76,7 @@ test.serial('FreeSeq.spawn always uses the root thread as master', async (t) => 
     await Worker.fork(parent, async () => {
         const promise = freeseq.spawn('detached', async () => Worker.getThread().name);
 
-        t.is(Thread.masters.get(promise.thread), Thread.ROOT);
+        t.is(Thread.master(promise.thread), Thread.ROOT);
         t.is(await freeseq.join(promise), 'detached');
     });
 
@@ -95,8 +98,8 @@ test.serial('FreeSeq sync overloads return threads and emit join events directly
         const forked = freeseq.fork('child');
         const spawned = freeseq.spawn('detached');
 
-        t.is(Thread.masters.get(forked), parent);
-        t.is(Thread.masters.get(spawned), Thread.ROOT);
+        t.is(Thread.master(forked), parent);
+        t.is(Thread.master(spawned), Thread.ROOT);
 
         freeseq.join(forked);
         freeseq.join(spawned);
@@ -131,7 +134,7 @@ test.serial('FreeSeq.join joins even when the task rejects', async (t) => {
     t.deepEqual(events, ['join:child->parent']);
 });
 
-test.serial('FreeSeq selfjoin and masterjoin use the expected joiner thread', (t) => {
+test.serial('FreeSeq.join accepts an explicit joiner thread for sync joins', (t) => {
     const events: string[] = [];
     const freeseq = FreeSeq.create(
         () => {},
@@ -143,14 +146,15 @@ test.serial('FreeSeq selfjoin and masterjoin use the expected joiner thread', (t
         name: 'orphan',
         id: ++Thread.count,
     };
+    const joiner = Thread.fork('joiner', Thread.ROOT);
 
-    freeseq.selfjoin(slave);
-    freeseq.masterjoin(slave);
-    freeseq.masterjoin(orphan);
+    freeseq.join(slave);
+    freeseq.join(slave, master);
+    freeseq.join(orphan, joiner);
 
     t.deepEqual(events, [
-        'join:slave->slave',
+        'join:slave->root',
         'join:slave->master',
-        'join:orphan->orphan',
+        'join:orphan->joiner',
     ]);
 });

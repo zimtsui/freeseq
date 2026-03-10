@@ -13,7 +13,12 @@ export namespace Thread {
         id: ++Thread.count,
     };
 
-    export const masters = new WeakMap<Thread, Thread>();
+    const masters = new WeakMap<Thread, Thread>();
+    export function master(thread: Thread): Thread {
+        const master = masters.get(thread);
+        if (master) return master;
+        else throw new Error(`The thread ROOT has no master.`);
+    }
 
     export class Promise<T> extends globalThis.Promise<T> {
         protected constructor(
@@ -33,7 +38,7 @@ export namespace Thread {
             name,
             id: ++Thread.count,
         };
-        Thread.masters.set(slave, master);
+        masters.set(slave, master);
         return slave;
     }
 }
