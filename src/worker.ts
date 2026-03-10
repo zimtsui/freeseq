@@ -10,16 +10,16 @@ export namespace Worker {
     export const ROOT: Worker = { thread: Thread.ROOT };
     const als = new AsyncLocalStorage<Worker>();
 
-    export function getWorker(): Worker {
+    function getWorker(): Worker {
         return als.getStore() ?? Worker.ROOT;
     }
 
     export function getThread(): Thread {
-        return Worker.getWorker().thread;
+        return getWorker().thread;
     }
 
     export function exec(thread: Thread): void {
-        Worker.getWorker().thread = thread;
+        getWorker().thread = thread;
     }
 
     export function fork<T>(
