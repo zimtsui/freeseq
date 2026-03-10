@@ -20,3 +20,5 @@
 -   `Worker.exec` 使当前 `Worker` 离开所在 `Thread` 前往另一个 `Thread` 去工作。
 
     这在前端时序图中表现为从此刻开始当前生命线进入静息状态，另一条生命线从此刻开始进入活跃状态。
+
+`FreeSeq` 只不过是 `onfork` 和 `onjoin` 监听器的一个 wrapper。如果创建两个 FreeSeq 实例，它们获取到的线程状态是共享的。

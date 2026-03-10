@@ -18,7 +18,7 @@ export namespace FreeSeq {
             protected onjoin: (joinee: Thread, joiner: Thread) => void,
         ) {}
 
-        public fork<T>(
+        protected forkAsync<T>(
             name: string,
             f: () => T,
         ): Thread.Promise<Awaited<T>> {
@@ -26,52 +26,64 @@ export namespace FreeSeq {
             const promise = Worker.fork(child, async (): Promise<Awaited<T>> => await f());
             return Thread.Promise.transform(promise, child);
         }
-
-        public forkSync(name: string): Thread {
+        protected forkSync(name: string): Thread {
             const master = Worker.getThread();
             const slave = Thread.fork(name, master);
             this.onfork(slave, master);
             return slave;
         }
 
-        public spawn<T>(
-            name: string,
-            f: () => T,
-        ): Thread.Promise<Awaited<T>> {
+        public fork(name: string): Thread;
+        public fork<T>(name: string, f: () => T): Thread.Promise<Awaited<T>>;
+        public fork<T>(name: string, f?: () => T): Thread | Thread.Promise<Awaited<T>> {
+            if (f) return this.forkAsync(name, f);
+            else return this.forkSync(name);
+        }
+
+        protected spawnAsync<T>(name: string, f: () => T): Thread.Promise<Awaited<T>> {
             const child = this.spawnSync(name);
             const promise = Worker.fork(child, async (): Promise<Awaited<T>> => await f());
             return Thread.Promise.transform(promise, child);
         }
-
-        public spawnSync(name: string): Thread {
+        protected spawnSync(name: string): Thread {
             const master = Thread.ROOT;
             const slave = Thread.fork(name, master);
             this.onfork(slave, master);
             return slave;
         }
 
-        /**
-         * @throws may throw synchronously if `onjoin` throws.
-         */
-        public join<T>(
-            promise: Thread.Promise<T>,
-        ): PromiseLike<T> {
-            return promise.finally(() => this.joinSync(promise.thread));
+        public spawn<T>(name: string, f: () => T): Thread.Promise<Awaited<T>>;
+        public spawn(name: string): Thread;
+        public spawn<T>(name: string, f?: () => T): Thread | Thread.Promise<Awaited<T>> {
+            if (f) return this.spawnAsync(name, f);
+            else return this.spawnSync(name);
         }
 
-        public joinSync(joinee: Thread): void {
+        protected joinAsync<T>(promise: Thread.Promise<T>): PromiseLike<T> {
+            return promise.finally(() => this.joinSync(promise.thread));
+        }
+        protected joinSync(joinee: Thread): void {
             const joiner = Worker.getThread();
             this.onjoin(joinee, joiner);
         }
-        public joinBySelfSync(joinee: Thread): void {
+
+        /**
+         * @throws may throw synchronously if `onjoin` throws.
+         */
+        public join<T>(promise: Thread.Promise<T>): PromiseLike<T>;
+        public join(joinee: Thread): void;
+        public join<T>(promiseOrJoinee: Thread.Promise<T> | Thread): PromiseLike<T> | void {
+            if (promiseOrJoinee instanceof Thread.Promise) return this.joinAsync(promiseOrJoinee);
+            else return this.joinSync(promiseOrJoinee);
+        }
+
+        public selfjoin(joinee: Thread): void {
             this.onjoin(joinee, joinee);
         }
-        public joinByMasterSync(slave: Thread): void {
+        public masterjoin(slave: Thread): void {
             const master = Thread.masters.get(slave);
-            if (master)
-                this.onjoin(slave, master);
-            else
-                return this.joinBySelfSync(slave);
+            if (master) this.onjoin(slave, master);
+            else return this.selfjoin(slave);
         }
     }
 
