@@ -375,3 +375,69 @@ test.serial('FreeSeq.hook disposes the wrapped async generator when iteration en
         'join:child->parent',
     ]);
 });
+
+test.serial('FreeSeq.hook feeds asynchronous wrapped generator rejections back through generator.throw and can continue', async (t) => {
+    const events: string[] = [];
+    const generatorEvents: string[] = [];
+    const freeseq = FreeSeq.create(
+        (slave, master) => events.push(`fork:${master.name}->${slave.name}`),
+        (joinee, joiner) => events.push(`join:${joinee.name}->${joiner.name}`),
+    );
+    const parent = Thread.fork('parent', Thread.ROOT);
+    const boom = new Error('boom');
+
+    await Worker.fork(parent, async () => {
+        async function *source(): AsyncGenerator<string, string, string> {
+            try {
+                t.is(Worker.getThread().name, 'child');
+                generatorEvents.push('start:child');
+                const first = yield 'step-1';
+
+                await Promise.resolve();
+                t.is(Worker.getThread().name, 'child');
+                generatorEvents.push(`first:${first}`);
+                await Promise.reject(boom);
+            } catch (error) {
+                t.is(error, boom);
+                await Promise.resolve();
+                t.is(Worker.getThread().name, 'child');
+                generatorEvents.push(`caught:${(error as Error).message}`);
+
+                const resumed = yield 'recovered';
+
+                await Promise.resolve();
+                t.is(Worker.getThread().name, 'child');
+                generatorEvents.push(`resume:${resumed}`);
+                return `done:${resumed}`;
+            }
+
+            return 'unreachable';
+        }
+
+        const hooked = freeseq.hook('child', source());
+
+        t.deepEqual(await hooked.next(), { value: 'step-1', done: false });
+        t.is(Worker.getThread(), parent);
+
+        t.deepEqual(await hooked.next('alpha'), { value: 'recovered', done: false });
+        t.is(Worker.getThread(), parent);
+
+        t.deepEqual(await hooked.next('resume'), { value: 'done:resume', done: true });
+        t.is(Worker.getThread(), parent);
+    });
+
+    t.deepEqual(generatorEvents, [
+        'start:child',
+        'first:alpha',
+        'caught:boom',
+        'resume:resume',
+    ]);
+    t.deepEqual(events, [
+        'fork:parent->child',
+        'join:child->parent',
+        'fork:parent->child',
+        'join:child->parent',
+        'fork:parent->child',
+        'join:child->parent',
+    ]);
+});

@@ -88,14 +88,23 @@ export namespace FreeSeq {
             generator0: AsyncGenerator<T, TReturn, TNext>,
         ): AsyncGenerator<T, TReturn, TNext> {
             await using generator = generator0;
-            let p = this.forkjoin(name, () => generator.next()), r = await p;
-            for (; !r.done; r = await p) try {
-                const y = yield r.value;
-                p = this.forkjoin(name, () => generator.next(y));
+            for (let p = this.forkjoin(name, () => generator.next());;) try {
+                const r = await p;
+                try {
+                    if (r.done) return r.value;
+                    const y = yield r.value;
+                    p = this.forkjoin(name, () => generator.next(y));
+                } catch (e) {
+                    p = this.forkjoin(name, () => generator.throw(e));
+                }
             } catch (e) {
-                p = this.forkjoin(name, () => generator.throw(e));
+                try {
+                    const y = yield Promise.reject(e);
+                    p = this.forkjoin(name, () => generator.next(y));
+                } catch (e) {
+                    p = this.forkjoin(name, () => generator.throw(e));
+                }
             }
-            return r.value;
         }
 
     }
