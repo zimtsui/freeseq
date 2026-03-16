@@ -323,7 +323,7 @@ test.serial('FreeSeq.hook forwards throw calls into the async generator and stil
     ]);
 });
 
-test.serial('FreeSeq.hook disposes the wrapped async generator when iteration ends early', async (t) => {
+test.serial('FreeSeq.hook forwards return calls without auto-disposing the wrapped async generator', async (t) => {
     const events: string[] = [];
     const generatorEvents: string[] = [];
     const freeseq = FreeSeq.create(
@@ -362,6 +362,61 @@ test.serial('FreeSeq.hook disposes the wrapped async generator when iteration en
         t.is(Worker.getThread(), parent);
 
         t.deepEqual(await hooked.return('stop'), { value: 'stop', done: true });
+        t.is(Worker.getThread(), parent);
+    });
+
+    t.false(disposed);
+    t.deepEqual(generatorEvents, [
+        'next:',
+        'return:stop',
+    ]);
+    t.deepEqual(events, [
+        'fork:parent->child',
+        'join:child->parent',
+        'fork:parent->child',
+        'join:child->parent',
+    ]);
+});
+
+test.serial('FreeSeq.hook forwards async disposal to the wrapped async generator', async (t) => {
+    const events: string[] = [];
+    const generatorEvents: string[] = [];
+    const freeseq = FreeSeq.create(
+        (slave, master) => events.push(`fork:${master.name}->${slave.name}`),
+        (joinee, joiner) => events.push(`join:${joinee.name}->${joiner.name}`),
+    );
+    const parent = Thread.fork('parent', Thread.ROOT);
+    let disposed = false;
+
+    const generator: AsyncGenerator<string, string, string> = {
+        async next(value?: string) {
+            generatorEvents.push(`next:${value ?? ''}`);
+            return { value: 'step-1', done: false };
+        },
+        async return(value: string | PromiseLike<string>) {
+            const resolved = await value;
+            generatorEvents.push(`return:${resolved}`);
+            return { value: resolved, done: true };
+        },
+        async throw(error?: unknown) {
+            throw error;
+        },
+        async [Symbol.asyncDispose]() {
+            disposed = true;
+            generatorEvents.push(`dispose:${Worker.getThread().name}`);
+        },
+        [Symbol.asyncIterator]() {
+            return this;
+        },
+    };
+
+    await Worker.fork(parent, async () => {
+        const hooked = freeseq.hook('child', generator);
+
+        t.deepEqual(await hooked.next(), { value: 'step-1', done: false });
+        t.is(Worker.getThread(), parent);
+
+        await hooked[Symbol.asyncDispose]();
         t.is(Worker.getThread(), parent);
     });
 

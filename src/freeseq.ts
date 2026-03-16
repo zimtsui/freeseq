@@ -83,30 +83,29 @@ export namespace FreeSeq {
             return this.join(this.fork(name, f));
         }
 
-        public async *hook<T, TReturn, TNext>(
+        public hook<T, TReturn, TNext>(
             name: string,
-            generator0: AsyncGenerator<T, TReturn, TNext>,
+            generator: AsyncGenerator<T, TReturn, TNext>,
         ): AsyncGenerator<T, TReturn, TNext> {
-            await using generator = generator0;
-            for (let p = this.forkjoin(name, () => generator.next());;) try {
-                const r = await p;
-                try {
-                    if (r.done) return r.value;
-                    const y = yield r.value;
-                    p = this.forkjoin(name, () => generator.next(y));
-                } catch (e) {
-                    p = this.forkjoin(name, () => generator.throw(e));
+            const that = this;
+            return {
+                async next(...values: [] | [TNext]) {
+                    return await that.forkjoin(name, () => generator.next(...values));
+                },
+                async throw(e) {
+                    return await that.forkjoin(name, () => generator.throw(e));
+                },
+                async return(value) {
+                    return await that.forkjoin(name, () => generator.return(value));
+                },
+                [Symbol.asyncIterator]() {
+                    return this;
+                },
+                [Symbol.asyncDispose]() {
+                    return generator[Symbol.asyncDispose]();
                 }
-            } catch (e) {
-                try {
-                    const y = yield Promise.reject(e);
-                    p = this.forkjoin(name, () => generator.next(y));
-                } catch (e) {
-                    p = this.forkjoin(name, () => generator.throw(e));
-                }
-            }
+            };
         }
-
     }
 
 }
