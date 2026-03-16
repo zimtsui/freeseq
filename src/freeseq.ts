@@ -85,8 +85,9 @@ export namespace FreeSeq {
 
         public async *hook<T, TReturn, TNext>(
             name: string,
-            generator: AsyncGenerator<T, TReturn, TNext>,
+            generator0: AsyncGenerator<T, TReturn, TNext>,
         ): AsyncGenerator<T, TReturn, TNext> {
+            await using generator = generator0;
             let p = this.forkjoin(name, () => generator.next()), r = await p;
             for (; !r.done; r = await p) try {
                 const y = yield r.value;
