@@ -82,6 +82,21 @@ export namespace FreeSeq {
         public forkjoin<T>(name: string, f: () => T): PromiseLike<Awaited<T>> {
             return this.join(this.fork(name, f));
         }
+
+        public async *hook<T, TReturn, TNext>(
+            name: string,
+            generator: AsyncGenerator<T, TReturn, TNext>,
+        ): AsyncGenerator<T, TReturn, TNext> {
+            let p = this.forkjoin(name, () => generator.next()), r = await p;
+            for (; !r.done; r = await p) try {
+                const y = yield r.value;
+                p = this.forkjoin(name, () => generator.next(y));
+            } catch (e) {
+                p = this.forkjoin(name, () => generator.throw(e));
+            }
+            return r.value;
+        }
+
     }
 
 }

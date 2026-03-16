@@ -208,3 +208,117 @@ test.serial('FreeSeq.join accepts an explicit joiner thread for sync joins', (t)
         'join:orphan->joiner',
     ]);
 });
+
+test.serial('FreeSeq.hook drives an async generator on child threads and returns to the caller thread', async (t) => {
+    const events: string[] = [];
+    const generatorEvents: string[] = [];
+    const freeseq = FreeSeq.create(
+        (slave, master) => events.push(`fork:${master.name}->${slave.name}`),
+        (joinee, joiner) => events.push(`join:${joinee.name}->${joiner.name}`),
+    );
+    const parent = Thread.fork('parent', Thread.ROOT);
+
+    await Worker.fork(parent, async () => {
+        async function *source(): AsyncGenerator<string, string, string> {
+            t.is(Worker.getThread().name, 'child');
+            generatorEvents.push('start:child');
+
+            const first = yield 'step-1';
+
+            await Promise.resolve();
+            t.is(Worker.getThread().name, 'child');
+            generatorEvents.push(`first:${first}`);
+
+            const second = yield `step-2:${first}`;
+
+            await Promise.resolve();
+            t.is(Worker.getThread().name, 'child');
+            generatorEvents.push(`second:${second}`);
+
+            return `${first}:${second}`;
+        }
+
+        const hooked = freeseq.hook('child', source());
+
+        t.deepEqual(await hooked.next(), { value: 'step-1', done: false });
+        t.is(Worker.getThread(), parent);
+
+        t.deepEqual(await hooked.next('alpha'), { value: 'step-2:alpha', done: false });
+        t.is(Worker.getThread(), parent);
+
+        t.deepEqual(await hooked.next('beta'), { value: 'alpha:beta', done: true });
+        t.is(Worker.getThread(), parent);
+    });
+
+    t.deepEqual(generatorEvents, [
+        'start:child',
+        'first:alpha',
+        'second:beta',
+    ]);
+    t.deepEqual(events, [
+        'fork:parent->child',
+        'join:child->parent',
+        'fork:parent->child',
+        'join:child->parent',
+        'fork:parent->child',
+        'join:child->parent',
+    ]);
+});
+
+test.serial('FreeSeq.hook forwards throw calls into the async generator and still joins correctly', async (t) => {
+    const events: string[] = [];
+    const generatorEvents: string[] = [];
+    const freeseq = FreeSeq.create(
+        (slave, master) => events.push(`fork:${master.name}->${slave.name}`),
+        (joinee, joiner) => events.push(`join:${joinee.name}->${joiner.name}`),
+    );
+    const parent = Thread.fork('parent', Thread.ROOT);
+    const boom = new Error('boom');
+
+    await Worker.fork(parent, async () => {
+        async function *source(): AsyncGenerator<string, string, string> {
+            try {
+                t.is(Worker.getThread().name, 'child');
+                generatorEvents.push('start:child');
+                yield 'step-1';
+                t.fail();
+            } catch (error) {
+                t.is(error, boom);
+                await Promise.resolve();
+                t.is(Worker.getThread().name, 'child');
+                generatorEvents.push(`caught:${(error as Error).message}`);
+                yield 'recovered';
+            }
+
+            await Promise.resolve();
+            t.is(Worker.getThread().name, 'child');
+            generatorEvents.push('finish:child');
+            return 'done';
+        }
+
+        const hooked = freeseq.hook('child', source());
+
+        t.deepEqual(await hooked.next(), { value: 'step-1', done: false });
+        t.is(Worker.getThread(), parent);
+
+        t.deepEqual(await hooked.throw(boom), { value: 'recovered', done: false });
+        t.is(Worker.getThread(), parent);
+
+        t.deepEqual(await hooked.next(), { value: 'done', done: true });
+        t.is(Worker.getThread(), parent);
+    });
+
+    t.deepEqual(generatorEvents, [
+        'start:child',
+        'caught:boom',
+        'finish:child',
+    ]);
+    t.deepEqual(events, [
+        'fork:parent->child',
+        'join:child->parent',
+        'fork:parent->child',
+        'join:child->parent',
+        'fork:parent->child',
+        'join:child->parent',
+    ]);
+});
