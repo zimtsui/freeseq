@@ -83,6 +83,9 @@ export namespace FreeSeq {
             return this.join(this.fork(name, f));
         }
 
+        /**
+         * @param generator Ownership transferred.
+         */
         public hook<T, TReturn, TNext>(
             name: string,
             generator: AsyncGenerator<T, TReturn, TNext>,
