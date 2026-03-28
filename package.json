@@ -9,6 +9,9 @@
     "clean": "rm -rf ./build",
     "prepublishOnly": "npm run clean && npm run build"
   },
+  "engines": {
+    "node": ">=22"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/zimtsui/freeseq.git"
