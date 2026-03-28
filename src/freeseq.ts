@@ -105,7 +105,7 @@ export namespace FreeSeq {
                     return this;
                 },
                 [Symbol.asyncDispose]() {
-                    return generator[Symbol.asyncDispose]();
+                    return generator[Symbol.asyncDispose]?.();
                 }
             };
         }

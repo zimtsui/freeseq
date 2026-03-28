@@ -4,7 +4,7 @@
   "description": "",
   "type": "module",
   "scripts": {
-    "test": "ava ./build/test.js",
+    "test": "npm run build && ava ./build/test.js",
     "build": "tsc -b ./src/tsconfig.json",
     "clean": "rm -rf ./build",
     "prepublishOnly": "npm run clean && npm run build"

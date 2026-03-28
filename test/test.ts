@@ -1,8 +1,8 @@
 import test from 'ava';
 
-import { FreeSeq } from './freeseq.ts';
-import { Thread } from './thread.ts';
-import { Worker } from './worker.ts';
+import { FreeSeq } from '../build/freeseq.js';
+import { Thread } from '../build/thread.js';
+import { Worker } from '../build/worker.js';
 
 test.serial('Thread.fork records the master thread', (t) => {
     const master = Thread.fork('master', Thread.ROOT);
